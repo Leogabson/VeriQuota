@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="560" viewBox="0 0 1600 560" role="img" aria-labelledby="title desc">
+  <title id="title">VeriQuota primary logo</title>
+  <desc id="desc">A navy V inside an open circular Q measurement loop beside the VeriQuota wordmark.</desc>
+  <rect width="1600" height="560" rx="48" fill="#F5F4F1"/>
+  <!-- VQ measurement-loop mark. The open loop represents a measurable data quota; the V is verification. -->
+  <g transform="translate(96 96)" fill="none" stroke="#0F1E33" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M184 18C92 18 18 92 18 184s74 166 166 166c44 0 84-17 114-45" stroke-width="30"/>
+    <path d="M242 282l76 76" stroke-width="30"/>
+    <path d="M101 131l71 91 89-129" stroke-width="34"/>
+  </g>
+  <g fill="#0F1E33">
+    <text x="510" y="300" font-family="Manrope, 'Plus Jakarta Sans', Arial, sans-serif" font-size="156" font-weight="700" letter-spacing="-7">VeriQuota</text>
+    <text x="520" y="378" font-family="Manrope, 'Plus Jakarta Sans', Arial, sans-serif" font-size="37" font-weight="600" letter-spacing="1.6" fill="#6B7280">VERIFY WHERE YOUR DATA GOES</text>
+  </g>
+</svg>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">VeriQuota app icon</title>
+  <desc id="desc">An off-white V inside a measured Q loop on a deep navy rounded-square background.</desc>
+  <rect width="1024" height="1024" rx="224" fill="#0F1E33"/>
+  <g transform="translate(176 170)" fill="none" stroke="#F5F4F1" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M336 42C174 42 42 174 42 336s132 294 294 294c78 0 149-30 203-80" stroke-width="58"/>
+    <path d="M440 518l135 135" stroke-width="58"/>
+    <path d="M182 244l126 161 158-229" stroke-width="65"/>
+  </g>
+</svg>
