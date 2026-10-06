@@ -29,6 +29,16 @@ void main() {
               ${AppDatabase.colTimestamp} INTEGER NOT NULL
             )
           ''');
+          await db.execute('''
+            CREATE TABLE ${AppDatabase.tableDailyAggregates} (
+              ${AppDatabase.colDailyDate} TEXT NOT NULL,
+              ${AppDatabase.colPackageName} TEXT NOT NULL,
+              ${AppDatabase.colRxBytes} INTEGER NOT NULL,
+              ${AppDatabase.colTxBytes} INTEGER NOT NULL,
+              ${AppDatabase.colDailyTotalBytes} INTEGER NOT NULL,
+              PRIMARY KEY (${AppDatabase.colDailyDate}, ${AppDatabase.colPackageName})
+            )
+          ''');
         },
       ),
     );
@@ -276,5 +286,120 @@ void main() {
       final realWeek = await repository.getUsageThisWeek();
       expect(realWeek.any((e) => e.packageName == 'com.yesterday.app'), isTrue);
     }
+  });
+
+  test(
+      'usage recorded on Tuesday and Wednesday accumulates in getUsageThisWeek() when queried on Thursday',
+      () async {
+    // Choose a deterministic week: Monday Oct 5 to Sunday Oct 11, 2026
+    final tuesday = DateTime(2026, 10, 6, 14, 0, 0);
+    final wednesday = DateTime(2026, 10, 7, 16, 0, 0);
+    final thursday = DateTime(2026, 10, 8, 11, 0, 0);
+
+    // Insert Tuesday snapshots
+    await repository.insertRecords([
+      UsageRecord(packageName: 'app.alpha', rxBytes: 8000, txBytes: 2000, timestamp: tuesday),
+      UsageRecord(packageName: 'app.beta', rxBytes: 5000, txBytes: 1000, timestamp: tuesday),
+    ]);
+
+    // Insert Wednesday snapshots
+    await repository.insertRecords([
+      UsageRecord(packageName: 'app.alpha', rxBytes: 4000, txBytes: 1000, timestamp: wednesday),
+      UsageRecord(packageName: 'app.gamma', rxBytes: 15000, txBytes: 5000, timestamp: wednesday),
+    ]);
+
+    // Insert Thursday snapshot (live today data)
+    await repository.insertRecords([
+      UsageRecord(packageName: 'app.beta', rxBytes: 3000, txBytes: 1000, timestamp: thursday),
+    ]);
+
+    // Query on Thursday
+    final thisWeekUsage = await repository.getUsageThisWeek(now: thursday);
+
+    // Verify all 3 apps are included and their usage accumulated:
+    // app.gamma: 20,000 bytes (from Wednesday)
+    // app.alpha: 10,000 (Tue) + 5,000 (Wed) = 15,000 bytes
+    // app.beta: 6,000 (Tue) + 4,000 (Thu) = 10,000 bytes
+    expect(thisWeekUsage.length, 3);
+
+    final gamma = thisWeekUsage.firstWhere((a) => a.packageName == 'app.gamma');
+    expect(gamma.totalBytes, 20000);
+
+    final alpha = thisWeekUsage.firstWhere((a) => a.packageName == 'app.alpha');
+    expect(alpha.totalBytes, 15000);
+
+    final beta = thisWeekUsage.firstWhere((a) => a.packageName == 'app.beta');
+    expect(beta.totalBytes, 10000);
+  });
+
+  test('getUsageAllTime() total is unaffected by raw snapshot pruning', () async {
+    final now = DateTime(2026, 10, 8, 12, 0, 0);
+    final twentyDaysAgo = now.subtract(const Duration(days: 20));
+
+    // Insert raw snapshot older than retention (14 days)
+    await repository.insertRecord(
+      UsageRecord(
+        packageName: 'legacy.app',
+        rxBytes: 500000,
+        txBytes: 100000,
+        timestamp: twentyDaysAgo,
+      ),
+    );
+
+    // Insert raw snapshot today
+    await repository.insertRecord(
+      UsageRecord(
+        packageName: 'active.app',
+        rxBytes: 20000,
+        txBytes: 5000,
+        timestamp: now,
+      ),
+    );
+
+    // 1. Roll up completed days into permanent daily aggregates
+    await repository.rollupCompletedDays(now: now);
+
+    // 2. Prune raw snapshots older than 14 days
+    final pruned = await repository.pruneOldData(before: now.subtract(const Duration(days: 14)));
+    expect(pruned, greaterThanOrEqualTo(1));
+
+    // 3. Confirm raw table no longer has the 20-day-old record
+    final rawLegacy = await repository.getUsageForApp(
+      'legacy.app',
+      start: twentyDaysAgo.subtract(const Duration(hours: 1)),
+      end: twentyDaysAgo.add(const Duration(hours: 1)),
+    );
+    expect(rawLegacy, isNull);
+
+    // 4. Confirm getUsageAllTime() STILL includes legacy.app with full usage!
+    final allTime = await repository.getUsageAllTime(now: now);
+    final legacyInAllTime = allTime.firstWhere((a) => a.packageName == 'legacy.app');
+    expect(legacyInAllTime, isNotNull);
+    expect(legacyInAllTime.totalBytes, 600000);
+
+    final activeInAllTime = allTime.firstWhere((a) => a.packageName == 'active.app');
+    expect(activeInAllTime, isNotNull);
+    expect(activeInAllTime.totalBytes, 25000);
+  });
+
+  test('getDailyHistory and getWeeklyHistory return structured history with real dates', () async {
+    final now = DateTime(2026, 10, 8, 12, 0, 0);
+    final yesterday = now.subtract(const Duration(days: 1));
+
+    await repository.insertRecord(
+      UsageRecord(packageName: 'app.history', rxBytes: 1000, txBytes: 500, timestamp: yesterday),
+    );
+    await repository.insertRecord(
+      UsageRecord(packageName: 'app.history', rxBytes: 2000, txBytes: 500, timestamp: now),
+    );
+
+    final dailyHistory = await repository.getDailyHistory(days: 7, now: now);
+    expect(dailyHistory.length, greaterThanOrEqualTo(2));
+    expect(dailyHistory.first.date, UsageRepository.formatDate(now));
+    expect(dailyHistory.first.totalBytes, 2500);
+
+    final weeklyHistory = await repository.getWeeklyHistory(weeks: 4, now: now);
+    expect(weeklyHistory, isNotEmpty);
+    expect(weeklyHistory.first.totalBytes, greaterThanOrEqualTo(4000));
   });
 }

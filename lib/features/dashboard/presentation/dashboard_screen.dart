@@ -37,6 +37,7 @@ class _DashboardView extends StatelessWidget {
       DashboardTimeRange.today => 'Today',
       DashboardTimeRange.thisWeek => 'This Week',
       DashboardTimeRange.allTime => 'All Time',
+      DashboardTimeRange.history => 'History',
     };
 
     showModalBottomSheet<void>(
@@ -219,16 +220,23 @@ class _DashboardView extends StatelessWidget {
                     const SizedBox(height: 20),
                     // --- Time-Range Filter ---
                     _buildTimeRangeSelector(context, viewModel),
+                    const SizedBox(height: 12),
+                    // --- Real Date / Range Subtitle ---
+                    _buildDateRangeSubtitle(viewModel),
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Data Usage by App',
+                          viewModel.selectedTimeRange == DashboardTimeRange.history
+                              ? 'Daily Breakdown'
+                              : 'Data Usage by App',
                           style: AppTextStyles.titleLarge.copyWith(fontSize: 18),
                         ),
                         Text(
-                          '${viewModel.displayedApps.length} apps',
+                          viewModel.selectedTimeRange == DashboardTimeRange.history
+                              ? '${viewModel.dailyHistory.length} days'
+                              : '${viewModel.displayedApps.length} apps',
                           style: AppTextStyles.bodyMedium,
                         ),
                       ],
@@ -237,8 +245,11 @@ class _DashboardView extends StatelessWidget {
                 ),
               ),
             ),
-            // --- App Usage List ---
-            _buildAppListSection(context, viewModel),
+            // --- Section Content (History vs Apps) ---
+            if (viewModel.selectedTimeRange == DashboardTimeRange.history)
+              _buildDailyHistorySection(context, viewModel)
+            else
+              _buildAppListSection(context, viewModel),
             const SliverToBoxAdapter(
               child: SizedBox(height: 24),
             ),
@@ -374,7 +385,190 @@ class _DashboardView extends StatelessWidget {
             range: DashboardTimeRange.allTime,
             viewModel: viewModel,
           ),
+          _buildRangeTab(
+            label: 'History',
+            range: DashboardTimeRange.history,
+            viewModel: viewModel,
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDateRangeSubtitle(DashboardViewModel viewModel) {
+    final String label = switch (viewModel.selectedTimeRange) {
+      DashboardTimeRange.today => viewModel.todayDateLabel,
+      DashboardTimeRange.thisWeek => viewModel.thisWeekDateLabel,
+      DashboardTimeRange.allTime => 'Permanent all-time record',
+      DashboardTimeRange.history => 'Past 30 calendar days (permanent daily aggregates)',
+    };
+
+    return Row(
+      children: [
+        const Icon(
+          Icons.calendar_today_outlined,
+          size: 14,
+          color: AppColors.secondaryGray,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Manrope',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.secondaryGray,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDailyHistorySection(BuildContext context, DashboardViewModel viewModel) {
+    if (viewModel.isLoadingHistory) {
+      return const SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(40.0),
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      );
+    }
+
+    final history = viewModel.dailyHistory;
+
+    if (history.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+          child: Center(
+            child: Column(
+              children: [
+                Icon(
+                  Icons.calendar_month_outlined,
+                  size: 48,
+                  color: AppColors.secondaryGray.withValues(alpha: 0.5),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No daily history recorded yet',
+                  style: AppTextStyles.titleLarge.copyWith(fontSize: 16),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Permanent daily aggregates will appear here as each calendar day completes.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final entry = history[index];
+            final isToday = entry.date == UsageRepository.formatDate(DateTime.now());
+
+            return Card(
+              elevation: 0,
+              color: Colors.white,
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: Colors.black12, width: 0.5),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isToday
+                            ? AppColors.primaryNavy.withValues(alpha: 0.08)
+                            : const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        isToday ? Icons.today : Icons.event_note,
+                        size: 20,
+                        color: isToday ? AppColors.primaryNavy : AppColors.secondaryGray,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                entry.formattedDate,
+                                style: const TextStyle(
+                                  fontFamily: 'Manrope',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primaryNavy,
+                                ),
+                              ),
+                              if (isToday) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryNavy,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    'Today',
+                                    style: TextStyle(
+                                      fontFamily: 'Manrope',
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '↓ ${AppUsageEntry.formatBytes(entry.rxBytes)}   ↑ ${AppUsageEntry.formatBytes(entry.txBytes)}',
+                            style: const TextStyle(
+                              fontFamily: 'Manrope',
+                              fontSize: 12,
+                              color: AppColors.secondaryGray,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      entry.formattedTotal,
+                      style: const TextStyle(
+                        fontFamily: 'Manrope',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryNavy,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+          childCount: history.length,
+        ),
       ),
     );
   }

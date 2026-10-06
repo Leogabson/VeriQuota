@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "125364888802",
+    "project_id": "veriquota-bf40e",
+    "storage_bucket": "veriquota-bf40e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:125364888802:android:2a8cd61a927c5deb916abb",
+        "android_client_info": {
+          "package_name": "com.veriquota.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdILVHSrltjRO36VBrr3AeNyyJhsq3ZLE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

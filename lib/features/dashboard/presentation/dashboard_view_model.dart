@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../data/models/history_entry.dart';
 import '../../../data/repository/usage_repository.dart';
 import '../../vpn_native/models/app_usage_entry.dart';
 import '../../vpn_native/vpn_native_service.dart';
@@ -8,9 +9,11 @@ enum DashboardTimeRange {
   today,
   thisWeek,
   allTime,
+  history, // New tab for past days scrollable list
 }
 
-/// ViewModel for DashboardScreen managing live session telemetry and historical usage queries.
+/// ViewModel for DashboardScreen managing live session telemetry, historical usage queries,
+/// and permanent daily history.
 class DashboardViewModel extends ChangeNotifier {
   final VpnNativeService _vpnService;
   final UsageRepository usageRepository;
@@ -26,6 +29,9 @@ class DashboardViewModel extends ChangeNotifier {
 
   // Aggregated historical list based on _selectedTimeRange
   List<AppUsageEntry> _historicalApps = [];
+
+  // Permanent daily history entries
+  List<DailyHistoryEntry> _dailyHistory = [];
 
   StreamSubscription<List<AppUsageEntry>>? _liveStreamSub;
 
@@ -46,6 +52,49 @@ class DashboardViewModel extends ChangeNotifier {
   List<AppUsageEntry> get liveSessionApps => _liveSessionApps;
 
   List<AppUsageEntry> get displayedApps => _historicalApps;
+  List<DailyHistoryEntry> get dailyHistory => _dailyHistory;
+
+  int get selectedRangeTotalBytes {
+    int sum = 0;
+    for (final app in _historicalApps) {
+      sum += app.totalBytes;
+    }
+    return sum;
+  }
+
+  /// Formatted date label for today's view (e.g. "Total usage — 5 October 2026")
+  String get todayDateLabel {
+    final now = DateTime.now();
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return 'Total usage — ${now.day} ${months[now.month - 1]} ${now.year}';
+  }
+
+  /// Formatted date range label for this week (e.g. "Week of 29 Sep – 5 Oct 2026")
+  String get thisWeekDateLabel {
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    final monday = startOfToday.subtract(Duration(days: now.weekday - 1));
+    final sunday = monday.add(const Duration(days: 6));
+
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final startDay = monday.day;
+    final startMonth = months[monday.month - 1];
+    final endDay = sunday.day;
+    final endMonth = months[sunday.month - 1];
+    final year = sunday.year;
+
+    if (startMonth == endMonth) {
+      return 'Week of $startDay – $endDay $startMonth $year';
+    } else {
+      return 'Week of $startDay $startMonth – $endDay $endMonth $year';
+    }
+  }
 
   int get maxHistoricalUsageBytes {
     if (_historicalApps.isEmpty) return 1;
@@ -122,18 +171,17 @@ class DashboardViewModel extends ChangeNotifier {
           results = await usageRepository.getUsageThisWeek();
           break;
         case DashboardTimeRange.allTime:
-          results = await usageRepository.getTopAppsByUsage(
-            range: DateTimeRange(
-              start: DateTime.fromMillisecondsSinceEpoch(0),
-              end: DateTime.now(),
-            ),
-            limit: 100,
-          );
+          results = await usageRepository.getUsageAllTime();
+          break;
+        case DashboardTimeRange.history:
+          results = [];
           break;
       }
       _historicalApps = results;
+      _dailyHistory = await usageRepository.getDailyHistory(days: 30);
     } catch (_) {
       _historicalApps = [];
+      _dailyHistory = [];
     } finally {
       _isLoadingHistory = false;
       notifyListeners();

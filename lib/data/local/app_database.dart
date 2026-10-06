@@ -4,14 +4,20 @@ import 'package:sqflite/sqflite.dart';
 /// Database manager for VeriQuota local storage.
 class AppDatabase {
   static const String databaseName = 'veriquota.db';
-  static const int databaseVersion = 1;
+  static const int databaseVersion = 2;
 
+  // Raw per-minute snapshots table
   static const String tableUsageSnapshots = 'usage_snapshots';
   static const String colId = 'id';
   static const String colPackageName = 'packageName';
   static const String colRxBytes = 'rxBytes';
   static const String colTxBytes = 'txBytes';
   static const String colTimestamp = 'timestamp';
+
+  // Permanent daily aggregates table
+  static const String tableDailyAggregates = 'daily_usage_aggregates';
+  static const String colDailyDate = 'date';
+  static const String colDailyTotalBytes = 'totalBytes';
 
   // Singleton instance
   static final AppDatabase instance = AppDatabase._internal();
@@ -45,6 +51,7 @@ class AppDatabase {
       path,
       version: databaseVersion,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -65,6 +72,35 @@ class AppDatabase {
 
     await db.execute('''
       CREATE INDEX idx_usage_package_timestamp ON $tableUsageSnapshots($colPackageName, $colTimestamp)
+    ''');
+
+    await _createDailyAggregatesTable(db);
+  }
+
+  static Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createDailyAggregatesTable(db);
+    }
+  }
+
+  static Future<void> _createDailyAggregatesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tableDailyAggregates (
+        $colDailyDate TEXT NOT NULL,
+        $colPackageName TEXT NOT NULL,
+        $colRxBytes INTEGER NOT NULL,
+        $colTxBytes INTEGER NOT NULL,
+        $colDailyTotalBytes INTEGER NOT NULL,
+        PRIMARY KEY ($colDailyDate, $colPackageName)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_daily_date ON $tableDailyAggregates($colDailyDate)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_daily_package ON $tableDailyAggregates($colPackageName)
     ''');
   }
 
